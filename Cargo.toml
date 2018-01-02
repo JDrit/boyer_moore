@@ -3,4 +3,8 @@ name = "boyer_moore"
 version = "0.1.0"
 authors = ["Joseph Batchik <josephbatchik@gmail.com>"]
 
+[[bin]]
+name = "search"
+
 [dependencies]
+ansi_term = "0.9"

@@ -1,8 +1,13 @@
 
+extern crate ansi_term;
+
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Read;
 use std::mem;
+use self::ansi_term::Colour;
+
+use search::bst;
 
 const ALPHABET_SIZE: usize = 256;
 
@@ -37,9 +42,7 @@ fn get_bad_character(pattern: &str) -> [Vec<i32>; ALPHABET_SIZE] {
     return result;
 }
 
-/*
- * Returns the contents of the file
- */
+/// Returns the contents of the file
 fn load_file<'a>(input: File) -> String {
     let mut buf_reader = BufReader::new(input);
     let mut contents = String::new();
@@ -47,20 +50,86 @@ fn load_file<'a>(input: File) -> String {
     return contents;
 }
 
-/*
- * Searches the file for the given pattern and returns the list
- * of places that it occurs in.
- */
-pub fn search_file(pattern: &str, input: File) -> Vec<usize> {
-    return search_string(pattern, load_file(input));    
+
+///
+/// Searches the file for the given pattern and returns the list
+/// of places that it occurs in.
+/// # Arguments
+/// * `pattern` - the string to search for
+/// * `input` - the file to check
+pub fn search_file(pattern: &str, input: File) {
+    let file_contents = load_file(input);
+    let chars = file_contents.chars().collect();
+    let results = search_string(pattern, file_contents);
+    
+    for result in results {
+        print_result(result, pattern, 1, &chars);
+    }
 }
 
+///
+/// Pretty prints the match found.
+/// # Arguments
+/// * `result` - the beggining offset that the pattern matched at
+/// * `pattern` - the actual pattern that matched
+/// * `line` - which line the result was found on
+/// * `chars` - the search contents
+///
+fn print_result(result: usize, pattern: &str, line: i32, chars: &Vec<char>) {
+    let mut min_offset = result;
+    let mut max_offset = result;
+
+    while min_offset != 0 && chars[min_offset] != '\n' {
+        min_offset -= 1;
+    }
+    
+    while max_offset != chars.len() - 1 && chars[max_offset] != '\n' {
+        max_offset += 1;
+    }
+    
+    let prefix: String = chars[(min_offset + 1)..result].into_iter()
+        .cloned().collect();
+    let suffix: String = chars[(result + pattern.len())..max_offset].into_iter()
+        .cloned().collect();
+
+    println!("{}: {}{}{}", line, prefix, Colour::Green.paint(pattern), suffix);
+}
+
+///
+/// Finds and prints all the occurences of the `pattern` in the `contents`
+/// search string.
+/// # Arguments
+/// * `pattern` the string to search for
+/// * `contents` the body to search within
+///
+/// # Result
+/// The list of offsets that pattern was found at
+///
+/// ```
+/// use boyer_moore::search::search;
+///
+/// let results: Vec<usize> = search::search_string("test", "search for test".to_string());
+/// assert_eq!(1, results.len());
+/// ```
+///
+///
 pub fn search_string(pattern: &str, contents: String) -> Vec<usize> {
-    let results = search(pattern, contents.chars().collect());
-    return results;
+    let chars = contents.chars().collect();
+    return search(pattern, &chars);
 }
 
-fn search(pattern: &str, contents: Vec<char>) -> Vec<usize> {
+///
+/// Finds the occurences of the pattern in the search area. Returns the
+/// starting index of every occurence.
+///
+/// # Arguments
+/// * `pattern` - the string to try and search for
+/// * `contents` - the body to search in
+///
+/// # Result
+/// The list of offsets that the pattern was found at
+///
+fn search(pattern: &str, contents: &Vec<char>) -> Vec<usize> {
     let mut results = Vec::new();
     let p_vec: Vec<char> = pattern.chars().collect();
 
@@ -89,7 +158,6 @@ fn search(pattern: &str, contents: Vec<char>) -> Vec<usize> {
 
         if valid { // match found
             let i = k + 1 - pattern.len();
-            println!("found at: {}", i);
             results.push(i);
             k += 1;
         } else { // no match
@@ -119,6 +187,12 @@ mod tests {
         let results = search_string("pattern", "a pattern to find".to_string());
         assert_eq!(1, results.len(), "only one result should be returned");
         assert_eq!(2, results[0], "correct index");
+    }
+
+    #[test]
+    fn another_test() {
+        let results: Vec<usize> = search_string("test", "search for test".to_string());
+        assert_eq!(1, results.len());
     }
 
     #[test]
