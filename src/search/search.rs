@@ -23,6 +23,18 @@ macro_rules! init_array(
     )
 );
 
+macro_rules! max(
+    ($e1: expr, $e2: expr) => (
+        {
+            if $e1 > $e2 {
+                $e1
+            } else {
+                $e2
+            }
+        }
+    )
+);
+
 fn match_length(pattern: &Vec<char>, mut i1: usize, mut i2: usize) -> usize {
     if i1 == i2 {
         return pattern.len() - i1;
@@ -80,8 +92,11 @@ fn preprocess(pattern: &str) -> Vec<usize> {
 }
 
 fn get_good_suffix(pattern: &str) -> Vec<i32> {
+    let p: String = pattern.to_string().chars().rev().collect();
+    let p_str: &str = p.as_str();
+    
     let mut result: Vec<i32> = vec![-1; pattern.len()];
-    let mut preprocess = preprocess(pattern);
+    let mut preprocess = preprocess(p_str);
     preprocess.reverse();
 
     for i in 0..(pattern.len() - 1) {
@@ -102,9 +117,7 @@ fn get_full_shift(pattern: &str) -> Vec<usize> {
 
     for (index, value) in z.iter().enumerate() {
         if *value == index + 1 {
-            if *value > longest {
-                longest = *value;
-            }
+            longest = max!(longest, *value);
         }
         let i = result.len() - index - 1;
         result[i] = longest; 
@@ -235,22 +248,23 @@ fn search(pattern: &str, contents: &Vec<char>) -> Vec<usize> {
     let mut prev_k: i32 = -1;
 
     while k < contents.len() {
-        let mut p_index = pattern.len() - 1; // index to search in the pattern
-        let mut c_index = k;                 // index to search in content
+        let mut p_index: usize = pattern.len() - 1; // index to search in the pattern
+        let mut c_index: usize = k;                 // index to search in content
         let mut valid = false;
 
-        while c_index as i32 > prev_k && p_vec[p_index] == contents[c_index] {
-            if p_index == 0 || c_index as i32 == prev_k {
+        while p_vec[p_index] == contents[c_index] {
+
+            if p_index == 0 || c_index as i32 == prev_k + 1 {
                 valid = true;
                 break;
+            } else {
+                p_index -= 1;
+                c_index -= 1;
             }
-            p_index -= 1;
-            c_index -= 1;                
         }
 
         if valid { // match found
             let i = k + 1 - pattern.len();
-            println!("match found at {}", i);
             results.push(i);
             k += 1;
         } else { // no match, calculate shift distance
@@ -265,23 +279,14 @@ fn search(pattern: &str, contents: &Vec<char>) -> Vec<usize> {
                 suffix_shift = (pattern.len() - full_shift[p_index + 1]) as i32;
             } else {
                 // matched suffix does appear in the input pattern
-                suffix_shift = pattern.len() as i32 - good_suffix[p_index + 1];
-            }
+                suffix_shift = pattern.len() as i32 - good_suffix[p_index + 1] - 1;
 
-            let shift;
-            if char_shift > suffix_shift {
-                println!("bad character shift");
-                shift = char_shift;
-            } else {
-                println!("good suffix shift");
-                shift = suffix_shift;
             }
-            
+            let shift = max!(char_shift, suffix_shift);
             if shift >= p_index as i32 + 1 {
                 prev_k = k as i32;
             }
-            println!("shift is {} to {}", shift, k);
-            k += shift as usize;
+            k += shift as usize;           
         }
     }
     return results;
@@ -353,8 +358,9 @@ mod tests {
 
     #[test]
     fn multiple_results() {
-        let results = search_string("jd ", "search jd in the string jd of jd".to_string());
-        assert_eq!(2, results.len(), "three results");
+        let input = "search jdd in the string jdd of jdd".to_string();
+        let results = search_string("jdd", input);
+        assert_eq!(3, results.len(), "three results");
     }
 
     #[test]
