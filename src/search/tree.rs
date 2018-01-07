@@ -1,9 +1,18 @@
 
 use std::cmp::Ordering;
-use std::fmt::Display;
 
 impl<K: Ord, V> Tree<K, V> {
 
+    ///
+    /// Contrusts a new Tree with the given types.
+    ///
+    /// ```
+    /// use boyer_moore::search::tree;
+    ///
+    /// let mut tree: tree::Tree<i32, i32> = tree::Tree::new();
+    /// let _ = tree.insert(5, 6);
+    /// assert_eq!(Some(&6), tree.get(5));
+    /// ```
     pub fn new() -> Tree<K, V> {
         return Tree { root: None, size: 0 }
     }
@@ -20,26 +29,60 @@ impl<K: Ord, V> Tree<K, V> {
         return result;
     }
 
-    pub fn get(self, key: K) -> Option<V> {
-        return Tree::get_value(self.root, key);        
+    pub fn get(&self, key: K) -> Option<&V> {
+        return Tree::get_value(&self.root, key);        
     }
 
-    pub fn lower_bound(&self, key: K) -> Option<(K, V)> {
+    ///
+    /// Returns the key-value pair where the key is the largest value less than or
+    /// equal to the input key. If there is no key less than the input key, then
+    /// None is returned.
+    ///
+    /// ```
+    /// use boyer_moore::search::tree;
+    /// let mut tree: tree::Tree<i32, String> = tree::Tree::new();
+    /// tree.insert(5, "five".to_string());
+    /// tree.insert(4, "four".to_string());
+    /// tree.insert(3, "three".to_string());
+    /// tree.insert(8, "eight".to_string());
+    ///
+    /// assert_eq!(Some((&8, &"eight".to_string())), tree.lower_bound(10));
+    /// assert_eq!(None, tree.lower_bound(2));
+    /// ```
+    ///
+    pub fn lower_bound(&self, key: K) -> Option<(&K, &V)> {
         return Tree::find_lower(&self.root, key);
     }
 
-    fn find_lower(node: &Option<Box<Node<K, V>>>, key: K) -> Option<(K, V)> {
-        return None;
+    fn find_lower(node: &Option<Box<Node<K, V>>>, key: K) -> Option<(&K, &V)> {
+        match *node {
+            None => None,
+            Some(ref n) =>
+                match key.cmp(&n.key) {
+                    Ordering::Less => return Tree::find_lower(&n.left, key),
+                    Ordering::Greater => {
+                        let r = Tree::find_lower(&n.right, key);
+                        if r.is_none() {
+                            return Some((&n.key, &n.value));
+                        } else {
+                            return r;
+                        }                    
+                    },
+                    Ordering::Equal => return Some((&n.key, &n.value)),
+                },
+        }            
     }
 
-    fn get_value(node: Option<Box<Node<K, V>>>, key: K) -> Option<V> {
-        return node.and_then(|n| {
-            match key.cmp(&n.key) {
-                Ordering::Less => return Tree::get_value(n.left, key),
-                Ordering::Greater => return Tree::get_value(n.right, key),
-                Ordering::Equal => return Some(n.value)
-            }
-        });
+    fn get_value(node: &Option<Box<Node<K, V>>>, key: K) -> Option<&V> {
+        match *node {
+            None => None,
+            Some(ref n) =>
+                match key.cmp(&n.key) {
+                    Ordering::Less => return Tree::get_value(&n.left, key),
+                    Ordering::Greater => return Tree::get_value(&n.right, key),
+                    Ordering::Equal => return Some(&n.value)
+                },
+        }
     }
 
     fn insert_node(node: &mut Option<Box<Node<K, V>>>, key: K, value: V) -> bool {
@@ -114,13 +157,17 @@ mod tests {
             tree.insert(i, i);
         }
         assert_eq!(size as usize, tree.size(), "large size");
+
+        for i in 0..size {
+            assert_eq!(Some(&i), tree.get(i), "correct value");
+        }
     }
 
     #[test]
     fn duplicate_insert() {
         let mut tree: Tree<i32, i32> = Tree::new();
 
-        for i in 0..5 {
+        for _ in 0..5 {
             tree.insert(10, 10);
         }
 
@@ -130,10 +177,10 @@ mod tests {
     #[test]
     fn insert_and_get() {
         let mut tree: Tree<i32, String> = Tree::new();
+        let value = "one".to_string();
+        tree.insert(1, value);
 
-        tree.insert(1, "one".to_string());
-
-        assert_eq!(Some("one".to_string()), tree.get(1), "should return inserted value");
+        assert_eq!(Some(&"one".to_string()), tree.get(1), "should return inserted value");
     }
 
     #[test]
@@ -145,7 +192,7 @@ mod tests {
         tree.insert(10, 10);
 
         let result = tree.lower_bound(5);
-        assert_eq!(Some((5, 5)), result);
+        assert_eq!(Some((&5, &5)), result);
     }
 
     #[test]
@@ -156,7 +203,7 @@ mod tests {
         tree.insert(5, 5);
         tree.insert(10, 10);
 
-        assert_eq!(Some((5, 5)), tree.lower_bound(6));
+        assert_eq!(Some((&5, &5)), tree.lower_bound(6));
     }
 
     #[test]
@@ -167,7 +214,7 @@ mod tests {
         tree.insert(1, 1);
         tree.insert(10, 10);
 
-        assert_eq!(Some((1, 1)), tree.lower_bound(2));
+        assert_eq!(Some((&1, &1)), tree.lower_bound(2));
     }
 
     #[test]
@@ -178,7 +225,7 @@ mod tests {
         tree.insert(5, 5);
         tree.insert(1, 1);
 
-        assert_eq!(Some((1, 1)), tree.lower_bound(2));
+        assert_eq!(Some((&1, &1)), tree.lower_bound(2));
     }
 
     #[test]
@@ -201,11 +248,8 @@ mod tests {
         tree.insert(60, 60);
         tree.insert(100, 100);
 
-        let r1 = tree.lower_bound(52);
-        let r2 = tree.lower_bound(99);
-        
-        assert_eq!(Some((50, 50)), tree.lower_bound(52));
-        assert_eq!(Some((75, 75)), tree.lower_bound(99));
+        assert_eq!(Some((&50, &50)), tree.lower_bound(52));
+        assert_eq!(Some((&75, &75)), tree.lower_bound(99));
     }
         
 }

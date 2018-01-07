@@ -7,7 +7,7 @@ use std::io::Read;
 use std::mem;
 use self::ansi_term::Colour;
 
-use search::bst;
+use search::tree;
 
 const ALPHABET_SIZE: usize = 256;
 

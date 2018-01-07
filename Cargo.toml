@@ -2,7 +2,6 @@
 name = "boyer_moore"
 version = "0.1.0"
 authors = ["Joseph Batchik <josephbatchik@gmail.com>"]
-license = "Apache-2.0"
 license-file = "LICENSE"
 
 [lib]
