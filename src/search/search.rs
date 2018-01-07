@@ -153,6 +153,23 @@ fn load_file<'a>(input: File) -> String {
     return contents;
 }
 
+/// mapping from character offset to line count
+fn build_line_tree(chars: &Vec<char>) -> tree::Tree<usize, usize> {
+    let mut tree = tree::Tree::new();
+    let mut line_count = 1;
+
+    tree.insert(0, line_count);
+    line_count += 1;
+    
+    for (offset, character) in chars.iter().enumerate() {
+        if *character == '\n' {
+            tree.insert(offset, line_count);
+            line_count += 1;
+        }
+    }    
+    return tree;
+}
+
 
 ///
 /// Searches the file for the given pattern and returns the list
@@ -164,9 +181,11 @@ pub fn search_file(pattern: &str, input: File) {
     let file_contents = load_file(input);
     let chars = file_contents.chars().collect();
     let results = search_string(pattern, file_contents);
+    let tree = build_line_tree(&chars);
     
     for result in results {
-        print_result(result, pattern, 1, &chars);
+        let (_, line) = tree.lower_bound(result).unwrap();
+        print_result(result, pattern, *line, &chars);
     }
 }
 
@@ -178,7 +197,7 @@ pub fn search_file(pattern: &str, input: File) {
 /// * `line` - which line the result was found on
 /// * `chars` - the search contents
 ///
-fn print_result(result: usize, pattern: &str, line: i32, chars: &Vec<char>) {
+fn print_result(result: usize, pattern: &str, line: usize, chars: &Vec<char>) {
     let mut min_offset = result;
     let mut max_offset = result;
 
