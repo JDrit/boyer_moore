@@ -269,7 +269,7 @@ fn search(pattern: &str, contents: &Vec<char>) -> Vec<usize> {
             k += 1;
         } else { // no match, calculate shift distance
             let bad_char = bad_char_table[contents[c_index] as usize][p_index];
-            let mut char_shift = p_index as i32 - bad_char;
+            let char_shift = p_index as i32 - bad_char;
 
             let suffix_shift;
             if p_index + 1 == pattern.len() {
