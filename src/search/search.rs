@@ -1,9 +1,11 @@
-
 extern crate ansi_term;
 
 use std::fs::File;
+use std::io::BufRead;
 use std::io::BufReader;
+use std::io::Chars;
 use std::io::Read;
+use std::iter::Peekable;
 use std::mem;
 use self::ansi_term::Colour;
 
@@ -170,7 +172,6 @@ fn build_line_tree(chars: &Vec<char>) -> tree::Tree<usize, usize> {
     return tree;
 }
 
-
 ///
 /// Searches the file for the given pattern and returns the list
 /// of places that it occurs in.
@@ -178,15 +179,8 @@ fn build_line_tree(chars: &Vec<char>) -> tree::Tree<usize, usize> {
 /// * `pattern` - the string to search for
 /// * `input` - the file to check
 pub fn search_file(pattern: &str, input: File) {
-    let file_contents = load_file(input);
-    let chars = file_contents.chars().collect();
-    let results = search_string(pattern, file_contents);
-    let tree = build_line_tree(&chars);
-    
-    for result in results {
-        let (_, line) = tree.lower_bound(result).unwrap();
-        print_result(result, pattern, *line, &chars);
-    }
+    let ref mut reader = BufReader::new(input);
+    search_buffer(pattern, reader);
 }
 
 ///
@@ -240,6 +234,71 @@ pub fn search_string(pattern: &str, contents: String) -> Vec<usize> {
     return search(pattern, &chars);
 }
 
+fn search_buffer(pattern_input: &str, buffer: &mut BufRead) -> Vec<usize> {
+    let mut results = Vec::new();
+    let pattern: Vec<char> = pattern_input.chars().collect();
+    let mut input = buffer.chars().map(|c| c.expect("decode failed"));
+
+    let bad_char_table = get_bad_character(pattern_input);
+    let good_suffix = get_good_suffix(pattern_input);
+    let full_shift = get_full_shift(pattern_input);
+
+    let mut k: usize = pattern.len() - 1;    
+    let mut prev_k: i32 = -1;
+    let mut buffer: Vec<char> = vec![];
+
+    loop {
+        // pulls off enough elements from the input into the internal buffer
+        let size_to_add = pattern.len() - buffer.len();
+        for _ in 0..size_to_add {
+            match input.next() {
+                Some(c) => buffer.push(c),                
+                None => return results,
+            }
+        }
+
+        let mut p_index: usize = pattern.len() - 1;
+        let mut valid = false;
+        while pattern[p_index] == buffer[p_index] {
+            if p_index == 0 {
+                valid = true;
+                break;
+            } else {
+                p_index -= 1;
+            }
+        }
+
+        if valid {
+            let i = k + 1 - pattern.len();
+            results.push(i);
+            k += 1;
+            println!("found match at {:?}", i);
+            buffer.drain(0..1);
+        } else {
+            let bad_char = bad_char_table[buffer[p_index] as usize][p_index];
+            let char_shift = p_index as i32 - bad_char;
+
+            let suffix_shift;
+            if p_index + 1 == pattern.len() {
+                suffix_shift = 1;
+            } else if good_suffix[p_index + 1] == -1 {
+                // matched suffix does not appear anywhere in the input pattern
+                suffix_shift = (pattern.len() - full_shift[p_index + 1]) as i32;
+            } else {
+                // matched suffix does appear in the input pattern
+                suffix_shift = pattern.len() as i32 - good_suffix[p_index + 1] - 1;
+            }
+            let shift = max!(char_shift, suffix_shift) as usize;
+            if shift >= p_index + 1 {
+                prev_k = k as i32;
+            }
+            k += shift;
+            buffer.drain(0..shift);
+        }
+    }
+    return results;
+}
+
 ///
 /// Finds the occurences of the pattern in the search area. Returns the
 /// starting index of every occurence.
@@ -258,6 +317,7 @@ fn search(pattern: &str, contents: &Vec<char>) -> Vec<usize> {
     if contents.len() == 0 || pattern.len() > contents.len() {
         return results;
     }
+    
     let bad_char_table = get_bad_character(pattern);
     let good_suffix = get_good_suffix(pattern);
     let full_shift = get_full_shift(pattern);
@@ -314,12 +374,29 @@ fn search(pattern: &str, contents: &Vec<char>) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn simple_search_buffer() {
+        let mut buffer = Cursor::new("a pattern to find".to_string());
+        let results = search_buffer("pattern", &mut buffer);
+        assert_eq!(1, results.len(), "only one result should be returned");
+        assert_eq!(2, results[0], "correct index");
+    }
 
     #[test]
     fn simple_search() {
         let results = search_string("pattern", "a pattern to find".to_string());
         assert_eq!(1, results.len(), "only one result should be returned");
         assert_eq!(2, results[0], "correct index");
+    }
+
+    #[test]
+    fn buffer_pattern_at_end() {
+        let mut buffer = Cursor::new("find test".to_string());
+        let results = search_buffer("test", &mut buffer);
+        assert_eq!(1, results.len());
+        assert_eq!(5, results[0]);
     }
 
     #[test]
@@ -344,6 +421,14 @@ mod tests {
     #[test]
     fn single_character_pattern() {
         let results = search_string("p", "abcdefghijklmnopqrstuvwxyz".to_string());
+        assert_eq!(1, results.len(), "only one result");
+        assert_eq!(15, results[0], "correct index");
+    }
+
+    #[test]
+    fn buffer_single_character_pattern() {
+        let mut buffer = Cursor::new("abcdefghijklmnopqrstuvwxyz".to_string());
+        let results = search_buffer("p", &mut buffer);
         assert_eq!(1, results.len(), "only one result");
         assert_eq!(15, results[0], "correct index");
     }
@@ -375,6 +460,13 @@ mod tests {
         assert_eq!(6, results.len(), "correct number of results");
     }
 
+    #[test]
+    fn buffer_two_character_repeat() {
+        let mut buffer = Cursor::new("abababababab".to_string());
+        let results = search_buffer("ab", &mut buffer);
+        assert_eq!(6, results.len(), "correct number of results");
+    }
+    
     #[test]
     fn multiple_results() {
         let input = "search jdd in the string jdd of jdd".to_string();

@@ -1,4 +1,4 @@
-
+#![feature(io)]
 extern crate boyer_moore;
 
 use std::env;
